@@ -1,10 +1,4 @@
-# Eclipse 
-
-*target*
-*.jar
-*.war
-*.ear
-*.class
+# Eclipse
 
 *.pydevproject
 .project
