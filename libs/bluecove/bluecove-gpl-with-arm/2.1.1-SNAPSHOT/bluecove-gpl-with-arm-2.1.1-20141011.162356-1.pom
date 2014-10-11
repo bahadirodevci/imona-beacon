@@ -3,6 +3,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>bluecove</groupId>
-  <artifactId>bluecove</artifactId>
-  <version>1.0</version>
+  <artifactId>bluecove-gpl-with-arm</artifactId>
+  <version>2.1.1-SNAPSHOT</version>
 </project>
