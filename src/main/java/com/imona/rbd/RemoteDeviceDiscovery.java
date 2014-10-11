@@ -1,8 +1,6 @@
 package com.imona.rbd;
 
 
-import org.springframework.web.client.RestTemplate;
-
 /**
  * Minimal Device Discovery example.
  */

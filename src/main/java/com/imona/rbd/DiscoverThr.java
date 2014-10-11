@@ -1,89 +1,161 @@
 package com.imona.rbd;
 
-import javax.bluetooth.*;
 import java.io.IOException;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Vector;
+
+import javax.bluetooth.DeviceClass;
+import javax.bluetooth.DiscoveryAgent;
+import javax.bluetooth.DiscoveryListener;
+import javax.bluetooth.LocalDevice;
+import javax.bluetooth.RemoteDevice;
+import javax.bluetooth.ServiceRecord;
 
 public class DiscoverThr implements Runnable {
-	public static List<MobileDevice> devicesDiscoveredLatest = new ArrayList<MobileDevice>();
-	public static final Vector uniquedevicesDiscoveredToSend = new Vector();
+	public static List<MobileDevice> currentDeviceList = new ArrayList<MobileDevice>();
+	public static List<MobileDevice> previousDeviceList = new ArrayList<MobileDevice>();
 
 	public void setUniqueDevices() {
-			
+
 	}
 
-    public boolean isNewDevice(String macAddress) {
-        for (MobileDevice md : devicesDiscoveredLatest) {
-            if (Objects.equals(md.macAddress, macAddress)) {
-                md.newestDisvoceredTime = new Date();
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public void addNewDevice(String macAddress, String friendlyName){
-		MobileDevice device= new MobileDevice();
-		device.firstDiscoveredTime=new Date();
-		device.friendlyName=friendlyName;
-		device.macAddress=macAddress;
+	public boolean isNewDevice(String macAddress) {
+		for (MobileDevice md : currentDeviceList) {
+			if (md.macAddress == macAddress) {
+				md.newestDisvoceredTime = new Date();
+				return false;
+			}
+		}
+		return true;
 	}
-	
+
+	public void addNewDevice(String macAddress, String friendlyName) {
+		MobileDevice device = new MobileDevice();
+		device.firstDiscoveredTime = new Date();
+		device.friendlyName = friendlyName;
+		device.macAddress = macAddress;
+		device.isSendToImona = false;
+		currentDeviceList.add(device);
+	}
+
 	public void run() {
 		try {
-			final Object inquiryCompletedEvent = new Object();
+			while (true) {
 
-			devicesDiscoveredLatest.clear();
+				final Object inquiryCompletedEvent = new Object();
 
-			DiscoveryListener listener = new DiscoveryListener() {
+				currentDeviceList.clear();
 
-				public void deviceDiscovered(RemoteDevice btDevice,
-						DeviceClass cod) {
-					boolean isNewDevice=isNewDevice(btDevice.getBluetoothAddress());
-					if (isNewDevice) {
+				DiscoveryListener listener = new DiscoveryListener() {
+
+					public void deviceDiscovered(RemoteDevice btDevice,
+							DeviceClass cod) {
 						try {
-							addNewDevice(btDevice.getBluetoothAddress(),btDevice.getFriendlyName(false));
+							addNewDevice(btDevice.getBluetoothAddress(),
+									btDevice.getFriendlyName(false));
 						} catch (IOException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
 					}
-				}
 
-				public void inquiryCompleted(int discType) {
-					System.out.println("Device Inquiry completed!");
-					synchronized (inquiryCompletedEvent) {
-						inquiryCompletedEvent.notifyAll();
+					public void inquiryCompleted(int discType) {
+						synchronized (inquiryCompletedEvent) {
+							inquiryCompletedEvent.notifyAll();
+						}
+					}
+
+					public void serviceSearchCompleted(int transID, int respCode) {
+					}
+
+					public void servicesDiscovered(int transID,
+							ServiceRecord[] servRecord) {
+					}
+				};
+
+				synchronized (inquiryCompletedEvent) {
+					boolean started = LocalDevice.getLocalDevice()
+							.getDiscoveryAgent()
+							.startInquiry(DiscoveryAgent.GIAC, listener);
+					if (started) {
+
+						inquiryCompletedEvent.wait();
+						System.out.println(currentDeviceList.size()
+								+ " device(s) found");
 					}
 				}
-
-				public void serviceSearchCompleted(int transID, int respCode) {
-				}
-
-				public void servicesDiscovered(int transID,
-						ServiceRecord[] servRecord) {
-				}
-			};
-
-			synchronized (inquiryCompletedEvent) {
-				boolean started = LocalDevice.getLocalDevice()
-						.getDiscoveryAgent()
-						.startInquiry(DiscoveryAgent.GIAC, listener);
-				if (started) {
-					System.out
-							.println("wait for device inquiry to complete...");
-					inquiryCompletedEvent.wait();
-					System.out.println(devicesDiscoveredLatest.size()
-							+ " device(s) found");
-				}
+				callRestService();
+				Thread.sleep(Constants.WaitRefrInterval);
 			}
+
 		} catch (Exception e) {
 			System.out.print("Error occured... " + e.getMessage());
 
 		}
 
 		System.out.println("device discovery end...");
-	}
-	
 
+	}
+
+	public void callRestService() {
+		String receivedMacs = "";
+		String leftMacs = "";
+
+		for (MobileDevice curr : currentDeviceList) {
+			boolean isPrev = false;
+			for (MobileDevice prev : previousDeviceList) {
+				if (prev.macAddress == curr.macAddress) {
+					isPrev = true;
+					break;
+				}
+			}
+			if (!isPrev) {
+				receivedMacs += curr.macAddress + ",";
+			}
+		}
+
+		// fill left macs...
+
+		for (MobileDevice prev : previousDeviceList) {
+			boolean isInBuilding = false;
+			for (MobileDevice curr : currentDeviceList) {
+				if (curr.macAddress == prev.macAddress) {
+					isInBuilding = true;
+					break;
+				}
+			}
+			if (!isInBuilding) {
+				leftMacs += prev.macAddress + ",";
+			}
+		}
+
+		//
+
+		if (receivedMacs != "") {
+			receivedMacs = receivedMacs.substring(0, receivedMacs.length() - 1);
+			// call rest...
+			RestCall.deviceDetected(Constants.IMONA_BRANCH_ID, receivedMacs);
+			System.out.println("service welcome call branchId:"
+					+ Constants.IMONA_BRANCH_ID + "%macs:" + receivedMacs);
+		}
+
+		if (leftMacs != "") {
+			leftMacs = leftMacs.substring(0, leftMacs.length() - 1);
+
+			RestCall.deviceLeft(Constants.IMONA_BRANCH_ID, leftMacs);
+			// call rest...
+			System.out.println("service left devices call branchId:"
+					+ Constants.IMONA_BRANCH_ID + "%macs:" + leftMacs);
+		}
+
+		previousDeviceList.clear();
+
+		for (MobileDevice device : currentDeviceList) {
+			previousDeviceList.add(device);
+		}
+	}
 }
