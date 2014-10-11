@@ -1,161 +1,153 @@
 package com.imona.rbd;
 
+import javax.bluetooth.*;
 import java.io.IOException;
-
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Vector;
-
-import javax.bluetooth.DeviceClass;
-import javax.bluetooth.DiscoveryAgent;
-import javax.bluetooth.DiscoveryListener;
-import javax.bluetooth.LocalDevice;
-import javax.bluetooth.RemoteDevice;
-import javax.bluetooth.ServiceRecord;
+import java.util.Objects;
 
 public class DiscoverThr implements Runnable {
-	public static List<MobileDevice> currentDeviceList = new ArrayList<MobileDevice>();
-	public static List<MobileDevice> previousDeviceList = new ArrayList<MobileDevice>();
+    public static List<MobileDevice> currentDeviceList = new ArrayList<MobileDevice>();
+    public static List<MobileDevice> previousDeviceList = new ArrayList<MobileDevice>();
 
-	public void setUniqueDevices() {
+    public void setUniqueDevices() {
 
-	}
+    }
 
-	public boolean isNewDevice(String macAddress) {
-		for (MobileDevice md : currentDeviceList) {
-			if (md.macAddress == macAddress) {
-				md.newestDisvoceredTime = new Date();
-				return false;
-			}
-		}
-		return true;
-	}
+    public boolean isNewDevice(String macAddress) {
+        for (MobileDevice md : currentDeviceList) {
+            if (Objects.equals(md.macAddress, macAddress)) {
+                md.newestDisvoceredTime = new Date();
+                return false;
+            }
+        }
+        return true;
+    }
 
-	public void addNewDevice(String macAddress, String friendlyName) {
-		MobileDevice device = new MobileDevice();
-		device.firstDiscoveredTime = new Date();
-		device.friendlyName = friendlyName;
-		device.macAddress = macAddress;
-		device.isSendToImona = false;
-		currentDeviceList.add(device);
-	}
+    public void addNewDevice(String macAddress, String friendlyName) {
+        MobileDevice device = new MobileDevice();
+        device.firstDiscoveredTime = new Date();
+        device.friendlyName = friendlyName;
+        device.macAddress = macAddress;
+        device.isSendToImona = false;
+        currentDeviceList.add(device);
+    }
 
-	public void run() {
-		try {
-			while (true) {
+    public void run() {
+        try {
+            while (true) {
 
-				final Object inquiryCompletedEvent = new Object();
+                final Object inquiryCompletedEvent = new Object();
 
-				currentDeviceList.clear();
+                currentDeviceList.clear();
 
-				DiscoveryListener listener = new DiscoveryListener() {
+                DiscoveryListener listener = new DiscoveryListener() {
 
-					public void deviceDiscovered(RemoteDevice btDevice,
-							DeviceClass cod) {
-						try {
-							addNewDevice(btDevice.getBluetoothAddress(),
-									btDevice.getFriendlyName(false));
-						} catch (IOException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-					}
+                    public void deviceDiscovered(RemoteDevice btDevice,
+                                                 DeviceClass cod) {
+                        try {
+                            addNewDevice(btDevice.getBluetoothAddress(),
+                                    btDevice.getFriendlyName(false));
+                        } catch (IOException e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    }
 
-					public void inquiryCompleted(int discType) {
-						synchronized (inquiryCompletedEvent) {
-							inquiryCompletedEvent.notifyAll();
-						}
-					}
+                    public void inquiryCompleted(int discType) {
+                        synchronized (inquiryCompletedEvent) {
+                            inquiryCompletedEvent.notifyAll();
+                        }
+                    }
 
-					public void serviceSearchCompleted(int transID, int respCode) {
-					}
+                    public void serviceSearchCompleted(int transID, int respCode) {
+                    }
 
-					public void servicesDiscovered(int transID,
-							ServiceRecord[] servRecord) {
-					}
-				};
+                    public void servicesDiscovered(int transID,
+                                                   ServiceRecord[] servRecord) {
+                    }
+                };
 
-				synchronized (inquiryCompletedEvent) {
-					boolean started = LocalDevice.getLocalDevice()
-							.getDiscoveryAgent()
-							.startInquiry(DiscoveryAgent.GIAC, listener);
-					if (started) {
+                synchronized (inquiryCompletedEvent) {
+                    boolean started = LocalDevice.getLocalDevice()
+                            .getDiscoveryAgent()
+                            .startInquiry(DiscoveryAgent.GIAC, listener);
+                    if (started) {
 
-						inquiryCompletedEvent.wait();
-						System.out.println(currentDeviceList.size()
-								+ " device(s) found");
-					}
-				}
-				callRestService();
-				Thread.sleep(Constants.WaitRefrInterval);
-			}
+                        inquiryCompletedEvent.wait();
+                        System.out.println(currentDeviceList.size()
+                                + " device(s) found");
+                    }
+                }
+                callRestService();
+                Thread.sleep(Constants.WaitRefrInterval);
+            }
 
-		} catch (Exception e) {
-			System.out.print("Error occured... " + e.getMessage());
+        } catch (Exception e) {
+            System.out.print("Error occured... " + e.getMessage());
 
-		}
+        }
 
-		System.out.println("device discovery end...");
+        System.out.println("device discovery end...");
 
-	}
+    }
 
-	public void callRestService() {
-		String receivedMacs = "";
-		String leftMacs = "";
+    public void callRestService() {
+        String receivedMacs = "";
+        String leftMacs = "";
 
-		for (MobileDevice curr : currentDeviceList) {
-			boolean isPrev = false;
-			for (MobileDevice prev : previousDeviceList) {
-				if (prev.macAddress == curr.macAddress) {
-					isPrev = true;
-					break;
-				}
-			}
-			if (!isPrev) {
-				receivedMacs += curr.macAddress + ",";
-			}
-		}
+        for (MobileDevice curr : currentDeviceList) {
+            boolean isPrev = false;
+            for (MobileDevice prev : previousDeviceList) {
+                if (Objects.equals(prev.macAddress, curr.macAddress)) {
+                    isPrev = true;
+                    break;
+                }
+            }
+            if (!isPrev) {
+                receivedMacs += curr.macAddress + ",";
+            }
+        }
 
-		// fill left macs...
+        // fill left macs...
 
-		for (MobileDevice prev : previousDeviceList) {
-			boolean isInBuilding = false;
-			for (MobileDevice curr : currentDeviceList) {
-				if (curr.macAddress == prev.macAddress) {
-					isInBuilding = true;
-					break;
-				}
-			}
-			if (!isInBuilding) {
-				leftMacs += prev.macAddress + ",";
-			}
-		}
+        for (MobileDevice prev : previousDeviceList) {
+            boolean isInBuilding = false;
+            for (MobileDevice curr : currentDeviceList) {
+                if (Objects.equals(curr.macAddress, prev.macAddress)) {
+                    isInBuilding = true;
+                    break;
+                }
+            }
+            if (!isInBuilding) {
+                leftMacs += prev.macAddress + ",";
+            }
+        }
 
-		//
+        //
 
-		if (receivedMacs != "") {
-			receivedMacs = receivedMacs.substring(0, receivedMacs.length() - 1);
-			// call rest...
-			RestCall.deviceDetected(Constants.IMONA_BRANCH_ID, receivedMacs);
-			System.out.println("service welcome call branchId:"
-					+ Constants.IMONA_BRANCH_ID + "%macs:" + receivedMacs);
-		}
+        if (!"".equals(receivedMacs)) {
+            receivedMacs = receivedMacs.substring(0, receivedMacs.length() - 1);
+            // call rest...
+            RestCall.deviceDetected(Constants.IMONA_BRANCH_ID, receivedMacs);
+            System.out.println("service welcome call branchId:"
+                    + Constants.IMONA_BRANCH_ID + "%macs:" + receivedMacs);
+        }
 
-		if (leftMacs != "") {
-			leftMacs = leftMacs.substring(0, leftMacs.length() - 1);
+        if (!"".equals(leftMacs)) {
+            leftMacs = leftMacs.substring(0, leftMacs.length() - 1);
 
-			RestCall.deviceLeft(Constants.IMONA_BRANCH_ID, leftMacs);
-			// call rest...
-			System.out.println("service left devices call branchId:"
-					+ Constants.IMONA_BRANCH_ID + "%macs:" + leftMacs);
-		}
+            RestCall.deviceLeft(Constants.IMONA_BRANCH_ID, leftMacs);
+            // call rest...
+            System.out.println("service left devices call branchId:"
+                    + Constants.IMONA_BRANCH_ID + "%macs:" + leftMacs);
+        }
 
-		previousDeviceList.clear();
+        previousDeviceList.clear();
 
-		for (MobileDevice device : currentDeviceList) {
-			previousDeviceList.add(device);
-		}
-	}
+        for (MobileDevice device : currentDeviceList) {
+            previousDeviceList.add(device);
+        }
+    }
 }
