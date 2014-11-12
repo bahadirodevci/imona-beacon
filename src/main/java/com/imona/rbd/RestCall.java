@@ -1,5 +1,7 @@
 package com.imona.rbd;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
@@ -16,6 +18,8 @@ import java.util.Map;
  */
 @SuppressWarnings("unchecked")
 public class RestCall {
+    private static Logger logger = LoggerFactory.getLogger(RestCall.class);
+
     public static Map<String, Object> deviceDetected(String branchId, String bluetoothId) {
         List<HttpMessageConverter<?>> messageConverters = new ArrayList<>();
         messageConverters.add(new MappingJackson2HttpMessageConverter());
@@ -53,30 +57,30 @@ public class RestCall {
             String branchId = "123456";
             String bluetoothId = "654321";
 
-            System.out.println("Device detected Test");
+            logger.info("Device detected Test");
             Map<String, Object> detectResult = RestCall.deviceDetected(branchId, bluetoothId);
             printResult(detectResult);
 
-            System.out.println("-------------------------------------------------------------");
+            logger.info("-------------------------------------------------------------");
 
-            System.out.println("Device left Test");
+            logger.info("Device left Test");
             Map<String, Object> leftResult = RestCall.deviceLeft(branchId, bluetoothId);
             printResult(leftResult);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error(e.getMessage(), e);
         }
     }
 
     private static void printResult(Map<String, Object> result) {
-        System.out.println("Results");
-        System.out.println("-------");
+        logger.info("Results");
+        logger.info("-------");
         if (result == null) {
-            System.out.println("null");
+            logger.info("null");
             return;
         }
 
         for (Map.Entry<String, Object> entry : result.entrySet()) {
-            System.out.println(entry.getKey() + ": " + entry.getValue());
+            logger.info(entry.getKey() + ": " + entry.getValue());
         }
     }
 }

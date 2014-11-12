@@ -1,5 +1,8 @@
 package com.imona.rbd;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.bluetooth.*;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -8,22 +11,24 @@ import java.util.List;
 import java.util.Objects;
 
 public class DiscoverThr implements Runnable {
-    public static List<MobileDevice> currentDeviceList = new ArrayList<MobileDevice>();
-    public static List<MobileDevice> previousDeviceList = new ArrayList<MobileDevice>();
+    public static List<MobileDevice> currentDeviceList = new ArrayList<>();
+    public static List<MobileDevice> previousDeviceList = new ArrayList<>();
 
-    public void setUniqueDevices() {
+    private static Logger logger = LoggerFactory.getLogger(DiscoverThr.class);
 
-    }
-
-    public boolean isNewDevice(String macAddress) {
-        for (MobileDevice md : currentDeviceList) {
-            if (Objects.equals(md.macAddress, macAddress)) {
-                md.newestDisvoceredTime = new Date();
-                return false;
-            }
-        }
-        return true;
-    }
+//    public void setUniqueDevices() {
+//
+//    }
+//
+//    public boolean isNewDevice(String macAddress) {
+//        for (MobileDevice md : currentDeviceList) {
+//            if (Objects.equals(md.macAddress, macAddress)) {
+//                md.newestDisvoceredTime = new Date();
+//                return false;
+//            }
+//        }
+//        return true;
+//    }
 
     public void addNewDevice(String macAddress, String friendlyName) {
         MobileDevice device = new MobileDevice();
@@ -35,13 +40,10 @@ public class DiscoverThr implements Runnable {
     }
 
     public void run() {
-        try {
-            while (true) {
-
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
                 final Object inquiryCompletedEvent = new Object();
-
                 currentDeviceList.clear();
-
                 DiscoveryListener listener = new DiscoveryListener() {
 
                     public void deviceDiscovered(RemoteDevice btDevice,
@@ -50,8 +52,7 @@ public class DiscoverThr implements Runnable {
                             addNewDevice(btDevice.getBluetoothAddress(),
                                     btDevice.getFriendlyName(false));
                         } catch (IOException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
+                            logger.error(e.getMessage(), e);
                         }
                     }
 
@@ -69,28 +70,28 @@ public class DiscoverThr implements Runnable {
                     }
                 };
 
+                //noinspection SynchronizationOnLocalVariableOrMethodParameter
                 synchronized (inquiryCompletedEvent) {
                     boolean started = LocalDevice.getLocalDevice()
                             .getDiscoveryAgent()
                             .startInquiry(DiscoveryAgent.GIAC, listener);
                     if (started) {
-
                         inquiryCompletedEvent.wait();
-                        System.out.println(currentDeviceList.size()
-                                + " device(s) found");
+
+                        logger.info(currentDeviceList.size() + " device(s) found");
                     }
                 }
                 callRestService();
-                Thread.sleep(Constants.WaitRefrInterval);
+                Thread.sleep(Constants.REFRESH_INTERVAL);
+            } catch (InterruptedException e) {
+                // propagate interrupt
+                Thread.currentThread().interrupt();
+                logger.error(e.getMessage(), e);
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
             }
-
-        } catch (Exception e) {
-            System.out.print("Error occured... " + e.getMessage());
-
         }
-
-        System.out.println("device discovery end...");
-
+        logger.info("Device discovery ended...");
     }
 
     public void callRestService() {
@@ -111,7 +112,6 @@ public class DiscoverThr implements Runnable {
         }
 
         // fill left macs...
-
         for (MobileDevice prev : previousDeviceList) {
             boolean isInBuilding = false;
             for (MobileDevice curr : currentDeviceList) {
@@ -125,13 +125,11 @@ public class DiscoverThr implements Runnable {
             }
         }
 
-        //
-
         if (!"".equals(receivedMacs)) {
             receivedMacs = receivedMacs.substring(0, receivedMacs.length() - 1);
             // call rest...
             RestCall.deviceDetected(Constants.IMONA_BRANCH_ID, receivedMacs);
-            System.out.println("service welcome call branchId:"
+            logger.info("service welcome call branchId:"
                     + Constants.IMONA_BRANCH_ID + "%macs:" + receivedMacs);
         }
 
@@ -140,7 +138,7 @@ public class DiscoverThr implements Runnable {
 
             RestCall.deviceLeft(Constants.IMONA_BRANCH_ID, leftMacs);
             // call rest...
-            System.out.println("service left devices call branchId:"
+            logger.info("service left devices call branchId:"
                     + Constants.IMONA_BRANCH_ID + "%macs:" + leftMacs);
         }
 
